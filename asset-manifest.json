@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/burkina-dashboard/static/css/main.323d7611.css",
+    "main.js": "/burkina-dashboard/static/js/main.a892c235.js",
+    "static/js/453.2d89192d.chunk.js": "/burkina-dashboard/static/js/453.2d89192d.chunk.js",
+    "index.html": "/burkina-dashboard/index.html",
+    "main.323d7611.css.map": "/burkina-dashboard/static/css/main.323d7611.css.map",
+    "main.a892c235.js.map": "/burkina-dashboard/static/js/main.a892c235.js.map",
+    "453.2d89192d.chunk.js.map": "/burkina-dashboard/static/js/453.2d89192d.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.323d7611.css",
+    "static/js/main.a892c235.js"
+  ]
+}
