@@ -2,6 +2,117 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Circle, Popup, LayersControl, useMap } from 'react-leaflet';
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart } from 'recharts';
 import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Composant de légende pour les cartes
+const MapLegend = ({ layer, maxValue, minValue = 0 }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    const legend = L.control({ position: 'bottomright' });
+
+    legend.onAdd = () => {
+      const div = L.DomUtil.create('div', 'info legend');
+      
+      const labels = {
+        schools: 'Écoles fermées',
+        children: 'Enfants affectés',
+        idps: 'Déplacés internes',
+        events: 'Incidents'
+      };
+      
+      const colors = {
+        schools: '#dc2626',
+        children: '#ea580c',
+        idps: '#f59e0b',
+        events: '#eab308'
+      };
+      
+      const color = colors[layer];
+      const label = labels[layer];
+      
+      // Calculer les intervalles
+      const ranges = [
+        { min: 0, max: maxValue * 0.25, opacity: 0.2 },
+        { min: maxValue * 0.25, max: maxValue * 0.5, opacity: 0.4 },
+        { min: maxValue * 0.5, max: maxValue * 0.75, opacity: 0.6 },
+        { min: maxValue * 0.75, max: maxValue, opacity: 0.8 }
+      ];
+      
+      div.innerHTML = `
+        <div style="
+          background: rgba(255, 255, 255, 0.95);
+          padding: 12px;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          font-family: 'Inter', sans-serif;
+        ">
+          <div style="
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #1e293b;
+            font-size: 13px;
+          ">${label}</div>
+          ${ranges.map((range, i) => {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            const bgColor = `rgba(${r}, ${g}, ${b}, ${range.opacity + 0.2})`;
+            
+            return `
+              <div style="
+                display: flex;
+                align-items: center;
+                margin: 4px 0;
+                font-size: 11px;
+                color: #334155;
+              ">
+                <span style="
+                  width: 20px;
+                  height: 20px;
+                  background: ${bgColor};
+                  border: 1px solid #94a3b8;
+                  margin-right: 8px;
+                  border-radius: 3px;
+                  display: inline-block;
+                "></span>
+                <span>${Math.round(range.min)} - ${Math.round(range.max)}</span>
+              </div>
+            `;
+          }).join('')}
+          <div style="
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+            font-size: 11px;
+            color: #334155;
+          ">
+            <span style="
+              width: 20px;
+              height: 20px;
+              background: #e5e7eb;
+              border: 1px solid #94a3b8;
+              margin-right: 8px;
+              border-radius: 3px;
+              display: inline-block;
+            "></span>
+            <span>Pas de données</span>
+          </div>
+        </div>
+      `;
+      
+      return div;
+    };
+
+    legend.addTo(map);
+
+    return () => {
+      legend.remove();
+    };
+  }, [map, layer, maxValue]);
+
+  return null;
+};
 
 const BurkinaDashboard = () => {
   const [data, setData] = useState([]);
@@ -256,6 +367,29 @@ const BurkinaDashboard = () => {
     })).filter(d => d.events > 0 || d.closedSchools > 0);
   }, [filteredData]);
 
+  // Calculer les valeurs max pour les légendes de cartes
+  const mapMaxValues = useMemo(() => {
+    if (!regionalComparison.length) return { schools: 1, children: 1, idps: 1, events: 1 };
+    
+    return {
+      schools: Math.max(...regionalComparison.map(r => r.closedSchools), 1),
+      children: Math.max(...regionalComparison.map(r => r.childrenAffected), 1),
+      idps: Math.max(...regionalComparison.map(r => r.idps), 1),
+      events: Math.max(...regionalComparison.map(r => r.events), 1)
+    };
+  }, [regionalComparison]);
+
+  const provinceMapMaxValues = useMemo(() => {
+    if (!provincialComparison.length) return { schools: 1, children: 1, idps: 1, events: 1 };
+    
+    return {
+      schools: Math.max(...provincialComparison.map(p => p.closedSchools), 1),
+      children: Math.max(...provincialComparison.map(p => p.childrenAffected), 1),
+      idps: Math.max(...provincialComparison.map(p => p.idps), 1),
+      events: Math.max(...provincialComparison.map(p => p.events), 1)
+    };
+  }, [provincialComparison]);
+
   const regionColors = {
     'Sahel': '#dc2626',
     'Nord': '#ea580c',
@@ -376,27 +510,51 @@ const BurkinaDashboard = () => {
         background: 'rgba(15, 23, 42, 0.95)',
         padding: '24px 32px',
         borderBottom: '2px solid rgba(220, 38, 38, 0.3)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)'
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '20px'
       }}>
-        <h1 style={{
-          margin: '0 0 8px 0',
-          fontSize: '32px',
-          fontWeight: '700',
-          background: 'linear-gradient(135deg, #dc2626 0%, #ea580c 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          fontFamily: '"Playfair Display", Georgia, serif'
+        <div style={{ flex: 1 }}>
+          <h1 style={{
+            margin: '0 0 8px 0',
+            fontSize: '32px',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, #dc2626 0%, #ea580c 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontFamily: '"Playfair Display", Georgia, serif'
+          }}>
+            Tableau de Bord Humanitaire - Burkina Faso
+          </h1>
+          <p style={{
+            margin: '0',
+            fontSize: '16px',
+            color: '#94a3b8',
+            fontFamily: '"Inter", sans-serif'
+          }}>
+            Analyse géospatiale de la crise éducative et humanitaire | {filters.month} {filters.year}
+          </p>
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '8px',
+          background: 'rgba(255, 255, 255, 0.95)',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
         }}>
-          Tableau de Bord Humanitaire - Burkina Faso
-        </h1>
-        <p style={{
-          margin: '0',
-          fontSize: '16px',
-          color: '#94a3b8',
-          fontFamily: '"Inter", sans-serif'
-        }}>
-          Analyse géospatiale de la crise éducative et humanitaire | {filters.month} {filters.year}
-        </p>
+          <img 
+            src="Logo_UVCI.png" 
+            alt="Logo UVCI" 
+            style={{
+              height: '60px',
+              width: 'auto',
+              objectFit: 'contain'
+            }}
+          />
+        </div>
       </header>
 
       {/* Filtres obligatoires */}
@@ -898,6 +1056,10 @@ const BurkinaDashboard = () => {
                     }}
                     onEachFeature={onEachRegion}
                   />
+                  <MapLegend 
+                    layer={mapLayer} 
+                    maxValue={mapMaxValues[mapLayer]} 
+                  />
                 </MapContainer>
               )}
             </div>
@@ -965,6 +1127,10 @@ const BurkinaDashboard = () => {
                       };
                     }}
                     onEachFeature={onEachProvince}
+                  />
+                  <MapLegend 
+                    layer={mapLayer} 
+                    maxValue={provinceMapMaxValues[mapLayer]} 
                   />
                 </MapContainer>
               )}
