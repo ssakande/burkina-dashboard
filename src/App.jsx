@@ -4,8 +4,84 @@ import { LineChart, Line, BarChart, Bar, AreaChart, Area, ScatterChart, Scatter,
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Composant de légende pour les cartes
-const MapLegend = ({ layer, maxValue, minValue = 0 }) => {
+// Algorithme de classification de Jenks (Natural Breaks)
+const getJenksBreaks = (values, numClasses) => {
+  if (!values || values.length === 0) return [];
+  
+  const data = values.filter(v => v > 0).sort((a, b) => a - b);
+  if (data.length === 0) return [];
+  if (data.length <= numClasses) {
+    return [...new Set(data)].sort((a, b) => a - b);
+  }
+
+  const matrices = {
+    lower: [],
+    variance: []
+  };
+
+  for (let i = 0; i < data.length + 1; i++) {
+    matrices.lower[i] = [];
+    matrices.variance[i] = [];
+    for (let j = 0; j < numClasses + 1; j++) {
+      matrices.lower[i][j] = 0;
+      matrices.variance[i][j] = 0;
+    }
+  }
+
+  for (let i = 1; i < data.length + 1; i++) {
+    let sum = 0;
+    let sumSquares = 0;
+    let variance = 0;
+
+    for (let j = 1; j < i + 1; j++) {
+      const val = data[j - 1];
+      sum += val;
+      sumSquares += val * val;
+      variance = sumSquares - (sum * sum) / j;
+      
+      matrices.lower[i][1] = j;
+      matrices.variance[i][1] = variance;
+
+      for (let k = 2; k < numClasses + 1; k++) {
+        const s = i - matrices.lower[i][k - 1];
+        if (s !== 0) {
+          let newSum = 0;
+          let newSumSquares = 0;
+          
+          for (let p = 0; p < s; p++) {
+            const idx = i - s + p;
+            const val = data[idx];
+            newSum += val;
+            newSumSquares += val * val;
+          }
+          
+          const newVariance = newSumSquares - (newSum * newSum) / s;
+          
+          if (matrices.variance[i][k] === 0 || newVariance + matrices.variance[i - s][k - 1] < matrices.variance[i][k]) {
+            matrices.lower[i][k] = s;
+            matrices.variance[i][k] = newVariance + matrices.variance[i - s][k - 1];
+          }
+        }
+      }
+    }
+  }
+
+  const breaks = [];
+  let k = data.length;
+  
+  for (let j = numClasses; j >= 1; j--) {
+    const id = matrices.lower[k][j];
+    breaks.unshift(data[k - id]);
+    k -= id;
+  }
+
+  breaks.push(data[data.length - 1]);
+  
+  return breaks;
+};
+
+// Composant de légende pour les cartes avec classification de Jenks
+const MapLegend = ({ layer, values, title }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -14,13 +90,6 @@ const MapLegend = ({ layer, maxValue, minValue = 0 }) => {
     legend.onAdd = () => {
       const div = L.DomUtil.create('div', 'info legend');
       
-      const labels = {
-        schools: 'Écoles fermées',
-        children: 'Enfants affectés',
-        idps: 'Déplacés internes',
-        events: 'Incidents'
-      };
-      
       const colors = {
         schools: '#dc2626',
         children: '#ea580c',
@@ -28,75 +97,91 @@ const MapLegend = ({ layer, maxValue, minValue = 0 }) => {
         events: '#eab308'
       };
       
-      const color = colors[layer];
-      const label = labels[layer];
+      const color = colors[layer] || '#dc2626';
       
-      // Calculer les intervalles
-      const ranges = [
-        { min: 0, max: maxValue * 0.25, opacity: 0.2 },
-        { min: maxValue * 0.25, max: maxValue * 0.5, opacity: 0.4 },
-        { min: maxValue * 0.5, max: maxValue * 0.75, opacity: 0.6 },
-        { min: maxValue * 0.75, max: maxValue, opacity: 0.8 }
-      ];
+      // Calculer les breaks de Jenks avec 5 classes
+      const breaks = getJenksBreaks(values, 5);
+      
+      // Créer les classes avec leurs couleurs
+      const classes = [];
+      if (breaks.length > 0) {
+        for (let i = 0; i < breaks.length - 1; i++) {
+          const opacity = 0.3 + (i / (breaks.length - 1)) * 0.6;
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          
+          classes.push({
+            min: breaks[i],
+            max: i < breaks.length - 1 ? breaks[i + 1] : breaks[i],
+            color: `rgba(${r}, ${g}, ${b}, ${opacity})`
+          });
+        }
+      }
       
       div.innerHTML = `
         <div style="
           background: rgba(255, 255, 255, 0.95);
           padding: 12px;
           border-radius: 8px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          box-shadow: 0 2px 10px rgba(0,0,0,0.3);
           font-family: 'Inter', sans-serif;
+          min-width: 200px;
         ">
           <div style="
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-weight: 700;
+            margin-bottom: 10px;
             color: #1e293b;
             font-size: 13px;
-          ">${label}</div>
-          ${ranges.map((range, i) => {
-            const r = parseInt(color.slice(1, 3), 16);
-            const g = parseInt(color.slice(3, 5), 16);
-            const b = parseInt(color.slice(5, 7), 16);
-            const bgColor = `rgba(${r}, ${g}, ${b}, ${range.opacity + 0.2})`;
+            border-bottom: 2px solid ${color};
+            padding-bottom: 6px;
+          ">${title}</div>
+          ${classes.map((cls, i) => {
+            const isLast = i === classes.length - 1;
+            const displayMax = isLast ? Math.round(cls.max) : Math.round(cls.max);
             
             return `
               <div style="
                 display: flex;
                 align-items: center;
-                margin: 4px 0;
+                margin: 5px 0;
                 font-size: 11px;
                 color: #334155;
               ">
                 <span style="
-                  width: 20px;
-                  height: 20px;
-                  background: ${bgColor};
+                  width: 24px;
+                  height: 18px;
+                  background: ${cls.color};
                   border: 1px solid #94a3b8;
                   margin-right: 8px;
                   border-radius: 3px;
                   display: inline-block;
+                  flex-shrink: 0;
                 "></span>
-                <span>${Math.round(range.min)} - ${Math.round(range.max)}</span>
+                <span style="font-weight: 500;">${Math.round(cls.min).toLocaleString()} - ${displayMax.toLocaleString()}</span>
               </div>
             `;
           }).join('')}
           <div style="
             display: flex;
             align-items: center;
-            margin: 4px 0;
+            margin: 5px 0;
             font-size: 11px;
             color: #334155;
+            padding-top: 6px;
+            border-top: 1px solid #e5e7eb;
           ">
             <span style="
-              width: 20px;
-              height: 20px;
+              width: 24px;
+              height: 18px;
               background: #e5e7eb;
               border: 1px solid #94a3b8;
               margin-right: 8px;
               border-radius: 3px;
               display: inline-block;
+              flex-shrink: 0;
             "></span>
-            <span>Pas de données</span>
+            <span style="font-style: italic; color: #64748b;">Pas de données</span>
           </div>
         </div>
       `;
@@ -109,9 +194,33 @@ const MapLegend = ({ layer, maxValue, minValue = 0 }) => {
     return () => {
       legend.remove();
     };
-  }, [map, layer, maxValue]);
+  }, [map, layer, values, title]);
 
   return null;
+};
+
+// Fonction pour obtenir la couleur basée sur les breaks de Jenks
+const getColorFromBreaks = (value, breaks, baseColor) => {
+  if (value === 0 || value === null || value === undefined) {
+    return '#e5e7eb';
+  }
+  
+  if (breaks.length === 0) return baseColor;
+  
+  let classIndex = 0;
+  for (let i = 0; i < breaks.length - 1; i++) {
+    if (value >= breaks[i] && value <= breaks[i + 1]) {
+      classIndex = i;
+      break;
+    }
+  }
+  
+  const opacity = 0.3 + (classIndex / (breaks.length - 1)) * 0.6;
+  const r = parseInt(baseColor.slice(1, 3), 16);
+  const g = parseInt(baseColor.slice(3, 5), 16);
+  const b = parseInt(baseColor.slice(5, 7), 16);
+  
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
 const BurkinaDashboard = () => {
@@ -367,26 +476,50 @@ const BurkinaDashboard = () => {
     })).filter(d => d.events > 0 || d.closedSchools > 0);
   }, [filteredData]);
 
-  // Calculer les valeurs max pour les légendes de cartes
-  const mapMaxValues = useMemo(() => {
-    if (!regionalComparison.length) return { schools: 1, children: 1, idps: 1, events: 1 };
+  // Calculer les breaks de Jenks pour les cartes des régions
+  const regionalBreaks = useMemo(() => {
+    if (!regionalComparison.length) return { schools: [], children: [], idps: [], events: [] };
     
     return {
-      schools: Math.max(...regionalComparison.map(r => r.closedSchools), 1),
-      children: Math.max(...regionalComparison.map(r => r.childrenAffected), 1),
-      idps: Math.max(...regionalComparison.map(r => r.idps), 1),
-      events: Math.max(...regionalComparison.map(r => r.events), 1)
+      schools: getJenksBreaks(regionalComparison.map(r => r.closedSchools), 5),
+      children: getJenksBreaks(regionalComparison.map(r => r.childrenAffected), 5),
+      idps: getJenksBreaks(regionalComparison.map(r => r.idps), 5),
+      events: getJenksBreaks(regionalComparison.map(r => r.events), 5)
     };
   }, [regionalComparison]);
 
-  const provinceMapMaxValues = useMemo(() => {
-    if (!provincialComparison.length) return { schools: 1, children: 1, idps: 1, events: 1 };
+  // Calculer les breaks de Jenks pour les cartes des provinces
+  const provincialBreaks = useMemo(() => {
+    if (!provincialComparison.length) return { schools: [], children: [], idps: [], events: [] };
     
     return {
-      schools: Math.max(...provincialComparison.map(p => p.closedSchools), 1),
-      children: Math.max(...provincialComparison.map(p => p.childrenAffected), 1),
-      idps: Math.max(...provincialComparison.map(p => p.idps), 1),
-      events: Math.max(...provincialComparison.map(p => p.events), 1)
+      schools: getJenksBreaks(provincialComparison.map(p => p.closedSchools), 5),
+      children: getJenksBreaks(provincialComparison.map(p => p.childrenAffected), 5),
+      idps: getJenksBreaks(provincialComparison.map(p => p.idps), 5),
+      events: getJenksBreaks(provincialComparison.map(p => p.events), 5)
+    };
+  }, [provincialComparison]);
+
+  // Valeurs pour les légendes
+  const regionalValues = useMemo(() => {
+    if (!regionalComparison.length) return { schools: [], children: [], idps: [], events: [] };
+    
+    return {
+      schools: regionalComparison.map(r => r.closedSchools),
+      children: regionalComparison.map(r => r.childrenAffected),
+      idps: regionalComparison.map(r => r.idps),
+      events: regionalComparison.map(r => r.events)
+    };
+  }, [regionalComparison]);
+
+  const provincialValues = useMemo(() => {
+    if (!provincialComparison.length) return { schools: [], children: [], idps: [], events: [] };
+    
+    return {
+      schools: provincialComparison.map(p => p.closedSchools),
+      children: provincialComparison.map(p => p.childrenAffected),
+      idps: provincialComparison.map(p => p.idps),
+      events: provincialComparison.map(p => p.events)
     };
   }, [provincialComparison]);
 
@@ -1025,40 +1158,48 @@ const BurkinaDashboard = () => {
                       const regionData = regionalComparison.find(r => r.region === regionName);
                       
                       let value = 0;
-                      let maxValue = 1;
+                      let breaks = [];
+                      let baseColor = '#dc2626';
                       
                       if (mapLayer === 'schools') {
                         value = regionData?.closedSchools || 0;
-                        maxValue = Math.max(...regionalComparison.map(r => r.closedSchools), 1);
+                        breaks = regionalBreaks.schools;
+                        baseColor = '#dc2626';
                       } else if (mapLayer === 'children') {
                         value = regionData?.childrenAffected || 0;
-                        maxValue = Math.max(...regionalComparison.map(r => r.childrenAffected), 1);
+                        breaks = regionalBreaks.children;
+                        baseColor = '#ea580c';
                       } else if (mapLayer === 'idps') {
                         value = regionData?.idps || 0;
-                        maxValue = Math.max(...regionalComparison.map(r => r.idps), 1);
+                        breaks = regionalBreaks.idps;
+                        baseColor = '#f59e0b';
                       } else if (mapLayer === 'events') {
                         value = regionData?.events || 0;
-                        maxValue = Math.max(...regionalComparison.map(r => r.events), 1);
+                        breaks = regionalBreaks.events;
+                        baseColor = '#eab308';
                       }
                       
-                      const intensity = maxValue > 0 ? value / maxValue : 0;
-                      const color = mapLayer === 'schools' ? '#dc2626' :
-                                   mapLayer === 'children' ? '#ea580c' :
-                                   mapLayer === 'idps' ? '#f59e0b' : '#eab308';
+                      const fillColor = getColorFromBreaks(value, breaks, baseColor);
                       
                       return {
-                        fillColor: value > 0 ? `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, ${0.2 + intensity * 0.6})` : '#e5e7eb',
+                        fillColor: fillColor,
                         weight: 1.5,
                         opacity: 1,
                         color: '#1f2937',
-                        fillOpacity: 0.7
+                        fillOpacity: 0.8
                       };
                     }}
                     onEachFeature={onEachRegion}
                   />
                   <MapLegend 
                     layer={mapLayer} 
-                    maxValue={mapMaxValues[mapLayer]} 
+                    values={regionalValues[mapLayer]}
+                    title={
+                      mapLayer === 'schools' ? 'Écoles fermées' :
+                      mapLayer === 'children' ? 'Enfants affectés' :
+                      mapLayer === 'idps' ? 'Personnes déplacées internes' :
+                      'Incidents sécuritaires'
+                    }
                   />
                 </MapContainer>
               )}
@@ -1097,40 +1238,48 @@ const BurkinaDashboard = () => {
                       const provinceData = provincialComparison.find(p => p.province === provinceName);
                       
                       let value = 0;
-                      let maxValue = 1;
+                      let breaks = [];
+                      let baseColor = '#dc2626';
                       
                       if (mapLayer === 'schools') {
                         value = provinceData?.closedSchools || 0;
-                        maxValue = Math.max(...provincialComparison.map(p => p.closedSchools), 1);
+                        breaks = provincialBreaks.schools;
+                        baseColor = '#dc2626';
                       } else if (mapLayer === 'children') {
                         value = provinceData?.childrenAffected || 0;
-                        maxValue = Math.max(...provincialComparison.map(p => p.childrenAffected), 1);
+                        breaks = provincialBreaks.children;
+                        baseColor = '#ea580c';
                       } else if (mapLayer === 'idps') {
                         value = provinceData?.idps || 0;
-                        maxValue = Math.max(...provincialComparison.map(p => p.idps), 1);
+                        breaks = provincialBreaks.idps;
+                        baseColor = '#f59e0b';
                       } else if (mapLayer === 'events') {
                         value = provinceData?.events || 0;
-                        maxValue = Math.max(...provincialComparison.map(p => p.events), 1);
+                        breaks = provincialBreaks.events;
+                        baseColor = '#eab308';
                       }
                       
-                      const intensity = maxValue > 0 ? value / maxValue : 0;
-                      const color = mapLayer === 'schools' ? '#dc2626' :
-                                   mapLayer === 'children' ? '#ea580c' :
-                                   mapLayer === 'idps' ? '#f59e0b' : '#eab308';
+                      const fillColor = getColorFromBreaks(value, breaks, baseColor);
                       
                       return {
-                        fillColor: value > 0 ? `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, ${0.2 + intensity * 0.6})` : '#e5e7eb',
+                        fillColor: fillColor,
                         weight: 1,
                         opacity: 1,
                         color: '#374151',
-                        fillOpacity: 0.7
+                        fillOpacity: 0.8
                       };
                     }}
                     onEachFeature={onEachProvince}
                   />
                   <MapLegend 
                     layer={mapLayer} 
-                    maxValue={provinceMapMaxValues[mapLayer]} 
+                    values={provincialValues[mapLayer]}
+                    title={
+                      mapLayer === 'schools' ? 'Écoles fermées' :
+                      mapLayer === 'children' ? 'Enfants affectés' :
+                      mapLayer === 'idps' ? 'Personnes déplacées internes' :
+                      'Incidents sécuritaires'
+                    }
                   />
                 </MapContainer>
               )}
