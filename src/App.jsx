@@ -223,7 +223,7 @@ const getColorFromBreaks = (value, breaks, baseColor) => {
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
-const BurkinaDashboard = () => {
+const App = () => {
   const [data, setData] = useState([]);
   const [regionsGeo, setRegionsGeo] = useState(null);
   const [provincesGeo, setProvincesGeo] = useState(null);
@@ -1472,4 +1472,4 @@ const BurkinaDashboard = () => {
   );
 };
 
-export default BurkinaDashboard;
+export default App;
