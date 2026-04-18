@@ -1,6 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Circle, Popup, LayersControl, useMap } from 'react-leaflet';
-import { LineChart, Line, BarChart, Bar, AreaChart, Area, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart } from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import {
+  BarChart, Bar, AreaChart, Area, ScatterChart, Scatter,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell,
+  RadarChart, PolarGrid, PolarAngleAxis,
+  PolarRadiusAxis, Radar
+} from 'recharts';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -553,14 +559,6 @@ const App = () => {
         </div>
       );
     }
-    return null;
-  };
-
-  const MapUpdater = ({ center, zoom }) => {
-    const map = useMap();
-    useEffect(() => {
-      map.setView(center, zoom);
-    }, [center, zoom, map]);
     return null;
   };
 
