@@ -223,6 +223,8 @@ const getColorFromBreaks = (value, breaks, baseColor) => {
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
+const MONTHS_ORDER = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
 const App = () => {
   const [data, setData] = useState([]);
   const [regionsGeo, setRegionsGeo] = useState(null);
@@ -313,10 +315,11 @@ const App = () => {
     return Array.from(new Set(data.map(d => d.Year))).sort();
   }, [data]);
 
-  // Mois disponibles (sans option "Tous")
+  // Mois disponibles triés chronologiquement (sans option "Tous")
   const months = useMemo(() => {
     if (!data.length) return [];
-    return Array.from(new Set(data.map(d => d.Month)));
+    const uniqueMonths = Array.from(new Set(data.map(d => d.Month)));
+    return MONTHS_ORDER.filter(m => uniqueMonths.includes(m));
   }, [data]);
 
   // Régions disponibles (avec option "Tous")
@@ -1013,12 +1016,10 @@ const App = () => {
                     <Pie
                       data={regionalComparison.slice(0, 8)}
                       cx="50%"
-                      cy="50%"
+                      cy="40%"
                       labelLine={false}
-                      label={({ region, closedSchools, percent }) => 
-                        `${region.split(' ')[0]} (${(percent * 100).toFixed(0)}%)`
-                      }
-                      outerRadius={100}
+                      label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                      outerRadius={85}
                       fill="#8884d8"
                       dataKey="closedSchools"
                     >
@@ -1026,7 +1027,11 @@ const App = () => {
                         <Cell key={`cell-${index}`} fill={Object.values(regionColors)[index % Object.values(regionColors).length]} />
                       ))}
                     </Pie>
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip />} formatter={(value, name, props) => [value.toLocaleString(), props.payload.region]} />
+                    <Legend
+                      formatter={(value, entry) => entry.payload.region}
+                      wrapperStyle={{ color: '#cbd5e1', fontSize: '11px', paddingTop: '8px' }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1148,8 +1153,8 @@ const App = () => {
                   style={{ height: '500px', width: '100%', borderRadius: '12px' }}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   <GeoJSON
                     data={regionsGeo}
@@ -1228,8 +1233,8 @@ const App = () => {
                   style={{ height: '500px', width: '100%', borderRadius: '12px' }}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   <GeoJSON
                     data={provincesGeo}
