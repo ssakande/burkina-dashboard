@@ -532,6 +532,89 @@ const App = () => {
     })).filter(d => d.events > 0 || d.closedSchools > 0);
   }, [filteredData]);
 
+  // Calcul des coefficients de corrélation (Pearson et Spearman)
+  const correlationStats = useMemo(() => {
+    if (correlationData.length < 3) return null;
+    const x = correlationData.map(d => d.events);
+    const y = correlationData.map(d => d.closedSchools);
+    const n = x.length;
+
+    // Pearson
+    const meanX = x.reduce((a, b) => a + b, 0) / n;
+    const meanY = y.reduce((a, b) => a + b, 0) / n;
+    const num = x.reduce((s, xi, i) => s + (xi - meanX) * (y[i] - meanY), 0);
+    const denX = Math.sqrt(x.reduce((s, xi) => s + (xi - meanX) ** 2, 0));
+    const denY = Math.sqrt(y.reduce((s, yi) => s + (yi - meanY) ** 2, 0));
+    const pearson = (denX === 0 || denY === 0) ? 0 : num / (denX * denY);
+
+    // Spearman (via rang)
+    const rank = arr => {
+      const sorted = [...arr].map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+      const ranks = new Array(arr.length);
+      let i = 0;
+      while (i < sorted.length) {
+        let j = i;
+        while (j < sorted.length - 1 && sorted[j + 1].v === sorted[j].v) j++;
+        const avgRank = (i + j) / 2 + 1;
+        for (let k = i; k <= j; k++) ranks[sorted[k].i] = avgRank;
+        i = j + 1;
+      }
+      return ranks;
+    };
+    const rx = rank(x), ry = rank(y);
+    const rmx = rx.reduce((a, b) => a + b, 0) / n;
+    const rmy = ry.reduce((a, b) => a + b, 0) / n;
+    const sNum = rx.reduce((s, rxi, i) => s + (rxi - rmx) * (ry[i] - rmy), 0);
+    const sDx = Math.sqrt(rx.reduce((s, rxi) => s + (rxi - rmx) ** 2, 0));
+    const sDy = Math.sqrt(ry.reduce((s, ryi) => s + (ryi - rmy) ** 2, 0));
+    const spearman = (sDx === 0 || sDy === 0) ? 0 : sNum / (sDx * sDy);
+
+    // p-value via t-distribution approximation (two-tailed)
+    const tStat = r => Math.abs(r) * Math.sqrt((n - 2) / (1 - r * r + 1e-10));
+    // Beta incomplete function approx for p-value
+    const pValue = r => {
+      const t = tStat(r);
+      const df = n - 2;
+      // Approximation: p ≈ 2 * (1 - T_cdf(t, df))
+      // Using Hill's approximation for t-distribution CDF
+      const x2 = df / (df + t * t);
+      let p = 0;
+      if (df % 2 === 0) {
+        let term = 1, sum = 1;
+        for (let k = 1; k <= df / 2 - 1; k++) {
+          term *= x2 * (1 - 1 / (2 * k));
+          sum += term;
+        }
+        p = Math.sqrt(1 - x2) * sum;
+      } else {
+        let term = Math.sqrt(1 - x2), sum = term;
+        for (let k = 1; k <= (df - 1) / 2; k++) {
+          term *= x2 * (1 - 1 / (2 * k - 1));
+          sum += term;
+        }
+        p = Math.asin(Math.sqrt(1 - x2)) * 2 / Math.PI + sum * Math.sqrt(x2 * (1 - x2)) * 2 / Math.PI;
+        p = 1 - p;
+      }
+      return Math.min(1, Math.max(0, 2 * p));
+    };
+
+    const formatP = p => p < 0.001 ? '< 0,001' : p < 0.01 ? '< 0,01' : p < 0.05 ? '< 0,05' : p.toFixed(3).replace('.', ',');
+    const sig = p => p < 0.001 ? '***' : p < 0.01 ? '**' : p < 0.05 ? '*' : 'ns';
+
+    const pP = pValue(pearson);
+    const pS = pValue(spearman);
+
+    return {
+      pearson: pearson.toFixed(3),
+      spearman: spearman.toFixed(3),
+      pPearson: formatP(pP),
+      pSpearman: formatP(pS),
+      sigPearson: sig(pP),
+      sigSpearman: sig(pS),
+      n
+    };
+  }, [correlationData]);
+
   // Calculer les breaks de Jenks pour les cartes des régions
   const regionalBreaks = useMemo(() => {
     if (!regionalComparison.length) return { schools: [], children: [], idps: [], events: [] };
@@ -1365,9 +1448,33 @@ const App = () => {
                   <Scatter data={correlationData} fill="#dc2626" name="Données" />
                 </ScatterChart>
               </ResponsiveContainer>
-              <p style={{ fontSize: '13px', color: '#cbd5e1', marginTop: '12px', textAlign: 'center' }}>
-                Chaque point représente une observation. Une tendance ascendante indique une corrélation positive.
-              </p>
+              {correlationStats && (
+                <div style={{ marginTop: '16px', padding: '14px 18px', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '10px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#94a3b8', textAlign: 'center' }}>
+                    Chaque point = une observation (n = {correlationStats.n})
+                  </p>
+                  <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: '0', fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pearson r</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: '700', color: '#f1f5f9' }}>
+                        {correlationStats.pearson} <span style={{ fontSize: '14px', color: '#fbbf24' }}>{correlationStats.sigPearson}</span>
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8' }}>p = {correlationStats.pPearson}</p>
+                    </div>
+                    <div style={{ width: '1px', background: 'rgba(148,163,184,0.2)' }} />
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ margin: '0', fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Spearman ρ</p>
+                      <p style={{ margin: '2px 0 0', fontSize: '20px', fontWeight: '700', color: '#f1f5f9' }}>
+                        {correlationStats.spearman} <span style={{ fontSize: '14px', color: '#fbbf24' }}>{correlationStats.sigSpearman}</span>
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8' }}>p = {correlationStats.pSpearman}</p>
+                    </div>
+                  </div>
+                  <p style={{ margin: '10px 0 0', fontSize: '11px', color: '#475569', textAlign: 'center' }}>
+                    *** p &lt; 0,001 &nbsp;·&nbsp; ** p &lt; 0,01 &nbsp;·&nbsp; * p &lt; 0,05 &nbsp;·&nbsp; ns non significatif
+                  </p>
+                </div>
+              )}
             </div>
 
             <div style={{
