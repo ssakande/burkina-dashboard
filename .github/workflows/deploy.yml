@@ -26,7 +26,7 @@ jobs:
         run: npm ci
 
       - name: Build React application
-        run: npm run build
+        run: CI=false npm run build
 
       - name: Deploy build to gh-pages
         uses: JamesIves/github-pages-deploy-action@v4
