@@ -1069,12 +1069,10 @@ const App = () => {
                     <Pie
                       data={regionalComparison.slice(0, 8)}
                       cx="50%"
-                      cy="50%"
+                      cy="40%"
                       labelLine={false}
-                      label={({ region, closedSchools, percent }) => 
-                        `${region.split(' ')[0]} (${(percent * 100).toFixed(0)}%)`
-                      }
-                      outerRadius={100}
+                      label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                      outerRadius={85}
                       fill="#8884d8"
                       dataKey="closedSchools"
                     >
@@ -1083,6 +1081,7 @@ const App = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
+                    <Legend formatter={(value, entry) => entry.payload.region} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -1204,8 +1203,8 @@ const App = () => {
                   style={{ height: '500px', width: '100%', borderRadius: '12px' }}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   <GeoJSON
                     data={regionsGeo}
@@ -1284,8 +1283,8 @@ const App = () => {
                   style={{ height: '500px', width: '100%', borderRadius: '12px' }}
                 >
                   <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; OpenStreetMap contributors &copy; CARTO'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   <GeoJSON
                     data={provincesGeo}
