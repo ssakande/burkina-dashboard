@@ -1081,7 +1081,7 @@ const App = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend formatter={(value, entry) => entry.payload.region} />
+                    <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: '12px' }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
