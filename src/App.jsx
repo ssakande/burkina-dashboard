@@ -1075,6 +1075,7 @@ const App = () => {
                       outerRadius={85}
                       fill="#8884d8"
                       dataKey="closedSchools"
+                      nameKey="region"
                     >
                       {regionalComparison.slice(0, 8).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={Object.values(regionColors)[index % Object.values(regionColors).length]} />
@@ -1106,7 +1107,7 @@ const App = () => {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend wrapperStyle={{ color: '#cbd5e1', fontSize: '13px' }} />
                   <Bar dataKey="closedSchools" fill="#dc2626" name="Écoles fermées" />
-                  <Bar dataKey="childrenAffected" fill="#ea580c" name="Enfants affectés (÷100)" />
+                  <Bar dataKey="childrenAffected" fill="#ea580c" name="Enfants affectés" />
                   <Bar dataKey="events" fill="#eab308" name="Incidents" />
                 </BarChart>
               </ResponsiveContainer>
